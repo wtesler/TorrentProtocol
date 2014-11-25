@@ -95,16 +95,8 @@ public:
     PriorityNode * tail;
 
     // Constructor
-    explicit PriorityList(unsigned int size) {
-
+    PriorityList(unsigned int size) {
             nodes = std::vector<PriorityNode>(size);
-
-            //nodes.resize(size, PriorityNode());
-
-            // Initialize the container of nodes
-            //nodes = vector<PriorityNode>(size);
-
-
     };
 
     PriorityList(void){};
