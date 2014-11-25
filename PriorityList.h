@@ -1,4 +1,5 @@
 #include "PriorityNode.h"
+#include <vector>
 
 #pragma once
 class PriorityList {
@@ -94,20 +95,15 @@ public:
     PriorityNode * tail;
 
     // Constructor
-    PriorityList(unsigned int size) {
+    explicit PriorityList(unsigned int size) {
+
+            nodes = std::vector<PriorityNode>(size);
+
+            //nodes.resize(size, PriorityNode());
 
             // Initialize the container of nodes
-            nodes = vector<PriorityNode>(size);
+            //nodes = vector<PriorityNode>(size);
 
-            // Weave the initial linked list.
-            for (unsigned int i = 1; i < nodes.size(); i++) {
-                nodes[i-1].back = &nodes[i];
-                nodes[i].front = &nodes[i-1];
-            }
-
-            // Initialize the lead and tail of the list
-            lead = &nodes[0];
-            tail = &nodes[nodes.size() - 1];
 
     };
 
@@ -123,8 +119,8 @@ public:
     // Changes the priority of a node.
     // This will cause prioritize to be called.
     void set(PriorityNode * node, int priority){
-        node->setPriority(priority);
         int oldPriority = node->getPriority();
+        node->setPriority(priority);
         prioritize(node, priority > oldPriority);
     };
 
