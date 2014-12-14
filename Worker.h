@@ -26,7 +26,7 @@ public:
         if (sendRequest != nullptr) {
             int * flag;
             MPI_Test(sendRequest, flag, sendStatus);
-            return flag;
+            return (*flag != 0);
         } else {
             return true;
         }

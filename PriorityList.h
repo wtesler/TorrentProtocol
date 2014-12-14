@@ -8,7 +8,7 @@ protected:
 
     // Underlying container.
     // Conditions: This container is immutable once filled.
-    std::vector<PriorityNode> nodes;
+    std::vector<PriorityNode*> nodes;
 
     // Ensures strict ordering of the linked list.
     void prioritize(PriorityNode * node, bool forward){
@@ -96,7 +96,7 @@ public:
 
     // Constructor
     PriorityList(unsigned int size) {
-            nodes = std::vector<PriorityNode>(size);
+            nodes = vector<PriorityNode*>(size);
     };
 
     PriorityList(void){};
@@ -105,7 +105,7 @@ public:
     // Overrides the [] operator to provide direct read access to the underlying vector
     // Note, this does not take priority into consideration, it simply returns nodes from the immutable vector.
     PriorityNode& operator [](const int i) {
-        return nodes[i];
+        return *nodes[i];
     };
 
     // Changes the priority of a node.

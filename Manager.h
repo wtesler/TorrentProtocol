@@ -1,6 +1,9 @@
 #include "TorrentNode.h"
 #include "TorrentNodeList.h"
 #include "Constants.h"
+#include <thread>
+#include <chrono>
+#include <iostream>
 
 #pragma once
 class Manager {
@@ -9,8 +12,12 @@ private:
 
     TorrentNodeList * list;
     char * catVideo;
-    MPI_Request * sendRequest, * recvRequest;
-    MPI_Status  * sendStatus, * recvStatus;
+    MPI_Request * sendRequest;
+    MPI_Status  * sendStatus;
+
+    double * rcvBuffer;
+
+    static const bool DEBUG = true;
 
 public:
 
@@ -25,18 +32,21 @@ public:
 
         // Organizes the video into prioritized chunks
         list = new TorrentNodeList(catVideo, MOVIE_SIZE_IN_BYTES, CHUNK_SIZE_IN_BYTES);
+
+        rcvBuffer = new double[1];
     }
 
     ~Manager() {
         delete catVideo;
         delete list;
+        delete[] rcvBuffer;
     }
 
     bool isSendComplete(){
         if (sendRequest != nullptr) {
             int * flag;
             MPI_Test(sendRequest, flag, sendStatus);
-            return flag;
+            return (*flag != 0);
         } else {
             return true;
         }
@@ -47,11 +57,79 @@ public:
         MPI_Ibsend(catVideo, CHUNK_SIZE_IN_BYTES, MPI_CHAR, dest, tag, MPI_COMM_WORLD, sendRequest);
     }
 
-    void receive() {
-        int * chunkNum;
-        MPI_Irecv(chunkNum, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, recvRequest);
-        int source = recvStatus->MPI_SOURCE;
+    void send(int dest, int tag, vector<int> addresses) {
+        MPI_Send(&addresses[0], addresses.size(), MPI_INT, dest, tag, MPI_COMM_WORLD);
+    }
+
+    // True if there are pending messages to receive.
+    bool hasMessage(MPI_Request * request, MPI_Status * status) {
+        int flag;
+        MPI_Test(request, &flag, status);
+        if (DEBUG) {
+            if (flag != 0) {
+                cout << "You have a message" << endl;
+            } else {
+                cout << "No messages at this time" << endl;
+            }
+        }
+        return flag != 0;
+    }
+
+    void something() {
+
+        MPI_Request recvRequest;
+        MPI_Status recvStatus;
+
+        MPI_Irecv(rcvBuffer, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &recvRequest); 
+        for (int i = 0; i < 10; i++) {
+            if (hasMessage(&recvRequest, &recvStatus)) {
+                receive(&recvStatus);
+                MPI_Irecv(rcvBuffer, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &recvRequest);
+            }
+            if (i % 3 == 0) send(0, i, vector<int>(1, i));
+            std::this_thread::sleep_for (std::chrono::seconds(1));
+        }
+
+       // send(0, i, vector<int>(1, i));
+    }
+
+    void receive(MPI_Status * status) {
+
+        // The computer that sent us the message.
+        int source = status->MPI_SOURCE;
+        int desiredChunkNum = status->MPI_TAG;
+
+        if (DEBUG) cout << "Comp " << source << " wants chunk " << desiredChunkNum << endl;
+
+        // This is the chunk that source wants
+        TorrentNode * desiredChunk = static_cast<TorrentNode*>(&list->operator[](desiredChunkNum));
+
+        // Will add source to the waitlist (Note: Will not add if already in list)
+        desiredChunk->add(source);
+
+        // Manager raises priority to acknowledge source's message.
+        list -> set(desiredChunk, desiredChunk->getPriority() + 1);
+
+        TorrentNode * node = static_cast<TorrentNode*>(list->lead);
+
+        while (node != nullptr && node->getWaitlist().size() > 0) {
+            if (node->getPosition() < desiredChunkNum) {
+
+                // Tell the source to do some work.
+                send(source, node->getPosition(), node->getWaitlist());
+
+                // Reward the source for helping out.
+                list -> set(desiredChunk, desiredChunk->getPriority() + node->getWaitlist().size());
+
+                // Reset the node, because source should be satisfying the waitlist.
+                node->clear();
+
+                break;
+            } else {
+                node = static_cast<TorrentNode*>(node->front);
+            }
+        }
+        
     }
 
 };
-

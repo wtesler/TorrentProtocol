@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
 
 void init_manager_process(Manager * manager){
     manager = new Manager();
-
+    manager->something();
 }
 
 void init_worker_process(Worker * worker){

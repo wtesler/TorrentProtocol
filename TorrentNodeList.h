@@ -22,33 +22,22 @@ public:
     TorrentNodeList(char* data, const unsigned int DATA_SIZE_IN_BYTES, const unsigned int CHUNK_SIZE_IN_BYTES)
         : PriorityList((DATA_SIZE_IN_BYTES / CHUNK_SIZE_IN_BYTES) + 1) {
 
-            // Initialize the container of chunks
-           // nodes = vector<PriorityNode>((DATA_SIZE_IN_BYTES / CHUNK_SIZE_IN_BYTES) + 1);
-
             for (unsigned int i = 0; i < nodes.size()-1; i++) {
-                nodes[i] = TorrentNode(data, CHUNK_SIZE_IN_BYTES);
+                nodes[i] = new TorrentNode(data, CHUNK_SIZE_IN_BYTES, i);
                 data+=CHUNK_SIZE_IN_BYTES;
             }
             // Last node gets the remainder amount of data.
-            nodes[nodes.size()-1] = TorrentNode(data, DATA_SIZE_IN_BYTES % CHUNK_SIZE_IN_BYTES);
+            nodes[nodes.size()-1] = new TorrentNode(data, DATA_SIZE_IN_BYTES % CHUNK_SIZE_IN_BYTES, nodes.size()-1);
 
             // Weave the initial linked list.
             for (unsigned int i = 1; i < nodes.size(); i++) {
-                nodes[i-1].back = &nodes[i];
-                nodes[i].front = &nodes[i-1];
+                nodes[i-1]->back = nodes[i];
+                nodes[i]->front = nodes[i-1];
             }
 
             // Initialize the lead and tail of the list
-            lead = &nodes[0];
-            tail = &nodes[nodes.size() - 1];
-
-            // for the purpose of testing, PLEASE REMOVE
-            for (unsigned int i = 0; i < nodes.size(); i++) {
-                nodes[i].setPriority(2 * (nodes.size()-1) - 2 * i);
-            }
-
-            lead = &nodes[0];
-            tail = &nodes[nodes.size() - 1];
-    };
+            lead = nodes[0];
+            tail = nodes[nodes.size() - 1];
+    }
 };
 
