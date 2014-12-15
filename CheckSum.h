@@ -1,5 +1,5 @@
 #pragma once
-unsigned short generateChecksum(const char *buf, unsigned size)
+inline unsigned short generateChecksum(const char *buf, unsigned size)
 {
 	unsigned sum = 0;
 	unsigned int i;

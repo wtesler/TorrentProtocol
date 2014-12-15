@@ -1,9 +1,11 @@
 #include "TorrentNode.h"
 #include "TorrentNodeList.h"
 #include "Constants.h"
-#include <thread>
-#include <chrono>
+#include <climits>
 #include <iostream>
+#include <chrono>
+#include <thread>
+#include <mpi.h>
 
 #pragma once
 class Manager {
@@ -14,8 +16,6 @@ private:
     char * catVideo;
     MPI_Request * sendRequest;
     MPI_Status  * sendStatus;
-
-    double * rcvBuffer;
 
     static const bool DEBUG = true;
 
@@ -33,32 +33,21 @@ public:
         // Organizes the video into prioritized chunks
         list = new TorrentNodeList(catVideo, MOVIE_SIZE_IN_BYTES, CHUNK_SIZE_IN_BYTES);
 
-        rcvBuffer = new double[1];
     }
 
     ~Manager() {
         delete catVideo;
         delete list;
-        delete[] rcvBuffer;
     }
 
-    bool isSendComplete(){
-        if (sendRequest != nullptr) {
-            int * flag;
-            MPI_Test(sendRequest, flag, sendStatus);
-            return (*flag != 0);
-        } else {
-            return true;
+    void sendData(char * data, int length, int chunkPosition, vector<int> addresses) {
+        for (unsigned int i = 0; i < addresses.size(); i++) {
+            MPI_Send(data, length, MPI_CHAR, addresses[i], TAG_DATA_REQUEST, MPI_COMM_WORLD);
         }
     }
 
-    // Warning! : Must check isSendComplete() before calling this method
-    void send(int dest, int tag) {
-        MPI_Ibsend(catVideo, CHUNK_SIZE_IN_BYTES, MPI_CHAR, dest, tag, MPI_COMM_WORLD, sendRequest);
-    }
-
-    void send(int dest, int tag, vector<int> addresses) {
-        MPI_Send(&addresses[0], addresses.size(), MPI_INT, dest, tag, MPI_COMM_WORLD);
+    void sendWorkOrder(int dest, int chunkPosition, vector<int> addresses) {
+        MPI_Send(&addresses[0], addresses.size(), MPI_INT, dest, chunkPosition, MPI_COMM_WORLD);
     }
 
     // True if there are pending messages to receive.
@@ -67,9 +56,9 @@ public:
         MPI_Test(request, &flag, status);
         if (DEBUG) {
             if (flag != 0) {
-                cout << "You have a message" << endl;
+                cout << "Manager has a message" << endl;
             } else {
-                cout << "No messages at this time" << endl;
+                cout << "Manager has no messages at this time" << endl;
             }
         }
         return flag != 0;
@@ -80,29 +69,34 @@ public:
         MPI_Request recvRequest;
         MPI_Status recvStatus;
 
-        MPI_Irecv(rcvBuffer, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &recvRequest); 
+	int chunkPosition;
+        MPI_Irecv(&chunkPosition, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &recvRequest); 
         for (int i = 0; i < 10; i++) {
-            if (hasMessage(&recvRequest, &recvStatus)) {
-                receive(&recvStatus);
-                MPI_Irecv(rcvBuffer, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &recvRequest);
+
+            if (hasMessage(&recvRequest, &recvStatus) && i % MANAGER_SEND_FREQ != 0) {
+                receive(&recvStatus, chunkPosition);
+                MPI_Irecv(&chunkPosition, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &recvRequest);
+            } else {
+                TorrentNode * node = static_cast<TorrentNode*>(list->lead);
+                sendData(node->getData(), node->getDataLength(), node->getPosition(), node->getWaitlist());
+                node->reset();
             }
-            if (i % 3 == 0) send(0, i, vector<int>(1, i));
-            std::this_thread::sleep_for (std::chrono::seconds(1));
+
+            this_thread::sleep_for(chrono::seconds(1));
         }
 
        // send(0, i, vector<int>(1, i));
     }
 
-    void receive(MPI_Status * status) {
+    void receive(MPI_Status * status, int chunkPosition) {
 
         // The computer that sent us the message.
         int source = status->MPI_SOURCE;
-        int desiredChunkNum = status->MPI_TAG;
 
-        if (DEBUG) cout << "Comp " << source << " wants chunk " << desiredChunkNum << endl;
+        if (DEBUG) cout << "Comp " << source << " wants chunk " << chunkPosition << endl;
 
         // This is the chunk that source wants
-        TorrentNode * desiredChunk = static_cast<TorrentNode*>(&list->operator[](desiredChunkNum));
+        TorrentNode * desiredChunk = static_cast<TorrentNode*>(&list->operator[](chunkPosition));
 
         // Will add source to the waitlist (Note: Will not add if already in list)
         desiredChunk->add(source);
@@ -113,23 +107,23 @@ public:
         TorrentNode * node = static_cast<TorrentNode*>(list->lead);
 
         while (node != nullptr && node->getWaitlist().size() > 0) {
-            if (node->getPosition() < desiredChunkNum) {
 
-                // Tell the source to do some work.
-                send(source, node->getPosition(), node->getWaitlist());
+            if (node->getPosition() < chunkPosition){
 
-                // Reward the source for helping out.
+                // Tell the worker to do some work.
+                sendWorkOrder(source, node->getPosition(), node->getWaitlist());
+
+                // Reward the worker for helping out.
                 list -> set(desiredChunk, desiredChunk->getPriority() + node->getWaitlist().size());
 
-                // Reset the node, because source should be satisfying the waitlist.
-                node->clear();
+                // Reset the node's waitlist and priority.
+                node->reset();
 
                 break;
             } else {
                 node = static_cast<TorrentNode*>(node->front);
             }
         }
-        
     }
 
 };

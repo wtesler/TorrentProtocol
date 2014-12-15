@@ -60,7 +60,15 @@ public:
         return waitlist;
     }
 
-    void clear() {
+    char * getData() {
+        return data;
+    }
+
+    int getDataLength() {
+        return dataLength;
+    }
+
+    void reset() {
         setPriority(0);
         waitlist.clear();
     }

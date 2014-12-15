@@ -1,6 +1,8 @@
 #include "PriorityNode.h"
 #include <vector>
 
+using namespace std;
+
 #pragma once
 class PriorityList {
 
@@ -8,7 +10,7 @@ protected:
 
     // Underlying container.
     // Conditions: This container is immutable once filled.
-    std::vector<PriorityNode*> nodes;
+    vector< PriorityNode* > nodes;
 
     // Ensures strict ordering of the linked list.
     void prioritize(PriorityNode * node, bool forward){

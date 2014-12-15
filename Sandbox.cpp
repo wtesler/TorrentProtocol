@@ -1,6 +1,8 @@
 #include <mpi.h>
 #include "Manager.h"
 #include "Worker.h"
+#include <chrono>
+#include <thread>
 
 using namespace std;
 
@@ -28,6 +30,8 @@ int main(int argc, char* argv[]) {
 
     if (manager != nullptr) delete manager;
     if (worker != nullptr) delete worker;
+
+    MPI_Finalize();  
     return 0;
 }
 
@@ -37,7 +41,9 @@ void init_manager_process(Manager * manager){
 }
 
 void init_worker_process(Worker * worker){
+    this_thread::sleep_for(chrono::seconds(1));
     worker = new Worker();
+    worker->something();
 }
 
 
