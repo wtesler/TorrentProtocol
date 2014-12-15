@@ -110,6 +110,10 @@ public:
         return *nodes[i];
     };
 
+    PriorityNode& nodeAt(const int i) {
+        return *nodes[i];
+    };
+
     // Changes the priority of a node.
     // This will cause prioritize to be called.
     void set(PriorityNode * node, int priority){
