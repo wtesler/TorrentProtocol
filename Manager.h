@@ -4,11 +4,13 @@
 #include <climits>
 #include <iostream>
 #include <mpi.h>
+#include <string>
+#include <sstream>
 
 #define DEBUG true
 
 typedef char BYTE;
-typedef int BOOL;
+typedef int FLAG;
 
 #pragma once
 class Manager {
@@ -22,6 +24,8 @@ private:
     TorrentNodeList * list;
 
     int networkSize;
+
+    vector<string> messageBuffer;
 
 public:
 
@@ -50,7 +54,11 @@ public:
     // Send a chunk of data to each computer inside addresses.
     void sendChunk(BYTE * data, int length, int chunkPosition, vector<int> addresses) {
         for (unsigned int i = 0; i < addresses.size(); i++) {
-            if (DEBUG) cout << "Manager sending chunk " << chunkPosition << " to Worker " << addresses[i] << endl;
+
+            stringstream ss;
+            ss << "Manager sending chunk " << chunkPosition << " to Worker " << addresses[i];
+            messageBuffer.push_back(ss.str());
+
             MPI_Send(data, length, MPI_CHAR, addresses[i], TAG_DATA_REQUEST, MPI_COMM_WORLD);
         }
     }
@@ -58,7 +66,10 @@ public:
     // Sends a work order to a computer.
     // Tells that computer to send data to another computer.
     void sendWorkOrder(int dest, int chunkPosition, vector<int> addresses) {
-        if (DEBUG) cout << "Sending Work Order to " << dest << endl;
+
+        stringstream ss;
+        ss << "Sending Work Order to " << dest;
+        messageBuffer.push_back(ss.str());
 
         // We store the position of the chunk in the last index of the vector.
         // Every other index contains rank addresses.
@@ -76,11 +87,11 @@ public:
 
         // Asynchronously receive data request.
         int chunkPosition;
-        MPI_Irecv(&chunkPosition, 1, MPI_INT, MPI_ANY_SOURCE, TAG_DATA_REQUEST, MPI_COMM_WORLD, &dataRequest);
+        FLAG dataFlag = -1;
 
         // Asynchronously receive termination notice.
-        int terminatingRank;
-        MPI_Irecv(&terminatingRank, 1, MPI_INT, MPI_ANY_SOURCE, TAG_TERMINATION_NOTICE, MPI_COMM_WORLD, &terminationRequest);
+        int dummy;
+        FLAG terminationFlag = -1;
 
         // Keeps track of how many workers have finished
         int numTerminations = 1;
@@ -92,25 +103,33 @@ public:
         // MAIN LOOP. Will only exit when there are no more workers in the swarm.
         while(numTerminations < networkSize){
 
+            if(dataFlag != 0){
+                MPI_Irecv(&chunkPosition, 1, MPI_INT, MPI_ANY_SOURCE, TAG_DATA_REQUEST, MPI_COMM_WORLD, &dataRequest);
+                dataFlag = 0;
+            }
             // Test to see if a data request has been received.
-            BOOL dataFlag;
             MPI_Test(&dataRequest, &dataFlag, &dataStatus);
             // If request has been received.
             if (dataFlag != 0) {
-                //process the new request.
-                processDataRequest(&dataStatus, chunkPosition);
-                // Issue a new asynchronous receive for data requests.
-                MPI_Irecv(&chunkPosition, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &dataRequest);
+                if (dataStatus.MPI_SOURCE != -1) {
+                    //process the new request.
+                    processDataRequest(&dataStatus, chunkPosition);
+                }
+                dataFlag = -1;
             } 
 
+            if(terminationFlag != 0){
+                MPI_Irecv(&dummy, 1, MPI_INT, MPI_ANY_SOURCE, TAG_TERMINATION_NOTICE, MPI_COMM_WORLD, &terminationRequest);
+                terminationFlag = 0;
+            }
             // Test to see if a termination notice has been received.
-            BOOL terminationFlag;
             MPI_Test(&terminationRequest, &terminationFlag, &terminationStatus);
             // If termination notice has been received.
             if (terminationFlag != 0) {
-                numTerminations++;
-                // Issue a new asynchronous receive for data requests.
-                MPI_Irecv(&chunkPosition, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &dataRequest);
+                if (terminationStatus.MPI_SOURCE != -1) {
+                    ++numTerminations;
+                    terminationFlag = -1;
+                }
             } 
 
             // Manager helps out with the data every so often (as defined by MANAGER_SEND_FREQ).
@@ -127,6 +146,16 @@ public:
             if (i == INT_MAX) { i = 0;}
             i++;
         }
+
+        stringstream ss;
+        ss << "Manager has terminated";
+        messageBuffer.push_back(ss.str());
+
+        if (DEBUG) {
+            for (string s : messageBuffer) {
+                cout << s << endl;
+            }
+        }
     }
 
     // 1. Extracts info from the request.
@@ -137,7 +166,9 @@ public:
         // The computer that sent us the request.
         int source = status->MPI_SOURCE;
 
-        if (DEBUG) cout << "Worker " << source << " wants chunk " << chunkPosition << endl;
+        stringstream ss;
+        ss << "Worker " << source << " wants chunk " << chunkPosition;
+        messageBuffer.push_back(ss.str());
 
         // This is the chunk that source wants
         TorrentNode * desiredChunk = static_cast<TorrentNode*>(&list->nodeAt(chunkPosition));
@@ -162,10 +193,12 @@ public:
         // Loops as long as there is still a potential chunk that source can help out with.
         while (iter != nullptr && iter->getWaitlist().size() > 0) {
 
-            if (DEBUG) cout << "Checking to see if comp " << source << " can help with chunk " << iter->getPosition() << endl;
+            stringstream ss;
+            ss << "Checking to see if Worker " << source << " can help with chunk " << iter->getPosition();
+            messageBuffer.push_back(ss.str());
 
             // If the source is ahead of the prioritized chunk
-            if (chunkPosition >= iter->getPosition()){
+            if (chunkPosition > iter->getPosition()){
 
                 // Tell the source to do some work.
                 sendWorkOrder(source, iter->getPosition(), iter->getWaitlist());

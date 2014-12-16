@@ -2,9 +2,8 @@
 // Recommended number of bytes per transmittable packet
 #define CHUNK_SIZE_IN_BYTES 1400
 
-// Size of our arbitrary byte data (which I assume is a movie here).
-// This is equivalent to a GB of data
-#define DATA_SIZE_IN_BYTES 1000000
+// Size of our arbitrary byte data
+#define DATA_SIZE_IN_BYTES 100000
 
 #define LEFTOVER_SIZE_IN_BYTES (DATA_SIZE_IN_BYTES % CHUNK_SIZE_IN_BYTES)
 
