@@ -2,7 +2,6 @@
 #include "Manager.h"
 #include "Worker.h"
 #include <time.h>
-#include <random>
 
 using namespace std;
 
@@ -40,9 +39,7 @@ int main(int argc, char* argv[]) {
     if (rank == 0) manager -> start();
     else worker -> start();
 
-    //do stuff here
     clock_gettime(CLOCK_MONOTONIC, &time2);
-
     long completionTime = time2.tv_nsec - time1.tv_nsec;
 
     if (rank == 0) {
@@ -67,7 +64,7 @@ void init_manager_process(Manager * manager, int size){
 void init_worker_process(Worker * worker, int rank){
     worker = new Worker(rank);
     timespec time;
-    time.tv_nsec = rand() % 100000;
+    time.tv_nsec = rank * 10000;
     nanosleep(&time, NULL);
     worker->start();
 }

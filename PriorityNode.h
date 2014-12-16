@@ -14,12 +14,12 @@ public:
     PriorityNode(void) : front(nullptr), back(nullptr), priority(0) {};
     ~PriorityNode(void){};
 
-    void setPriority(int priority) {
-        this->priority = priority;
-    }
-
     int getPriority() {
         return priority;
+    }
+
+    int setPriority(int priority) {
+        this->priority = priority;
     }
 };
 

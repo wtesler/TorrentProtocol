@@ -68,8 +68,7 @@ public:
         return dataLength;
     }
 
-    void reset() {
-        setPriority(0);
+    void clearWaitlist() {
         waitlist.clear();
     }
 };

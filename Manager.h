@@ -27,6 +27,8 @@ private:
 
     vector<string> messageBuffer;
 
+    MPI_Request * terminationRequests;
+
 public:
 
     // Constructor
@@ -43,12 +45,15 @@ public:
 
         // Structure the data into prioritizable chunks
         list = new TorrentNodeList(data, DATA_SIZE_IN_BYTES, CHUNK_SIZE_IN_BYTES);
+
+        terminationRequests = new MPI_Request[networkSize];
     }
 
     // Destructor
     ~Manager() {
-        delete data;
+        delete[] data;
         delete list;
+        delete[] terminationRequests;
     }
 
     // Send a chunk of data to each computer inside addresses.
@@ -89,12 +94,14 @@ public:
         int chunkPosition;
         FLAG dataFlag = -1;
 
-        // Asynchronously receive termination notice.
         int dummy;
-        FLAG terminationFlag = -1;
 
         // Keeps track of how many workers have finished
         int numTerminations = 1;
+
+        for (int i = 0; i < networkSize - 1; i++) {
+            MPI_Irecv(&dummy, 1, MPI_INT, i+1, TAG_TERMINATION_NOTICE, MPI_COMM_WORLD, &terminationRequests[i]);
+        }
 
         // Keeps track of how many times the main loop iterates (mod INT_MAX).
         // Useful for pacing the Manager.
@@ -116,21 +123,17 @@ public:
                     processDataRequest(&dataStatus, chunkPosition);
                 }
                 dataFlag = -1;
-            } 
-
-            if(terminationFlag != 0){
-                MPI_Irecv(&dummy, 1, MPI_INT, MPI_ANY_SOURCE, TAG_TERMINATION_NOTICE, MPI_COMM_WORLD, &terminationRequest);
-                terminationFlag = 0;
             }
-            // Test to see if a termination notice has been received.
-            MPI_Test(&terminationRequest, &terminationFlag, &terminationStatus);
-            // If termination notice has been received.
-            if (terminationFlag != 0) {
-                if (terminationStatus.MPI_SOURCE != -1) {
-                    ++numTerminations;
-                    terminationFlag = -1;
-                }
-            } 
+
+            for (int j = 0; j < networkSize-1; j++) {
+                FLAG terminationFlag = -1;
+                MPI_Test(&terminationRequests[j], &terminationFlag, &terminationStatus);
+                if (terminationFlag != 0) {
+                    if (terminationStatus.MPI_SOURCE != -1) {
+                        ++numTerminations;
+                    }
+                } 
+            }
 
             // Manager helps out with the data every so often (as defined by MANAGER_SEND_FREQ).
             if (i % MANAGER_SEND_FREQ == 0) {
@@ -139,7 +142,8 @@ public:
                 // Synchronously send the data each computer on the waitlist.
                 sendChunk(chunk->getData(), chunk->getDataLength(), chunk->getPosition(), chunk->getWaitlist());
                 // Reset the priority and waitlist of sent chunk.
-                chunk->reset();
+                chunk->clearWaitlist();
+                list->set(chunk, 0);
             }
 
             // Prevents oveflow.
@@ -176,11 +180,11 @@ public:
         // Adds source to the waitlist if not already on it.
         desiredChunk->add(source);
 
-        // See if the worker can help out.
-        createWorkRequest(source, chunkPosition, desiredChunk);
-
         // Raise priority of chunk to reflect source's message.
         list -> set(desiredChunk, desiredChunk->getPriority() + 1);
+
+        // See if the worker can help out.
+        createWorkRequest(source, chunkPosition, desiredChunk);
 
     }
 
@@ -191,7 +195,7 @@ public:
         TorrentNode * iter = static_cast<TorrentNode*>(list->lead);
 
         // Loops as long as there is still a potential chunk that source can help out with.
-        while (iter != nullptr && iter->getWaitlist().size() > 0) {
+        while (iter != nullptr && iter->getPriority() > 0) {
 
             stringstream ss;
             ss << "Checking to see if Worker " << source << " can help with chunk " << iter->getPosition();
@@ -207,7 +211,8 @@ public:
                 list -> set(desiredChunk, desiredChunk->getPriority() + iter->getWaitlist().size());
 
                 // Reset the node's waitlist and priority.
-                iter->reset();
+                iter->clearWaitlist();
+                list->set(iter, 0);
 
                 break;
             }
