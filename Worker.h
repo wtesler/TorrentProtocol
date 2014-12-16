@@ -5,7 +5,7 @@
 #include <vector>
 #include <sstream>
 
-#define DEBUG true
+#define DEBUG false
 
 typedef int FLAG;
 typedef char BYTE;
@@ -59,9 +59,6 @@ public:
             FLAG dataFlag = -1;
             MPI_Request dataRequest;
             MPI_Status dataStatus;
-
-            FLAG workFlag = -1;
-            MPI_Status workStatus;
             
             // IDLE LOOP
             // Continously test for incoming data, and break when it arrives.
@@ -87,18 +84,6 @@ public:
                         break; 
                     }
                 }
-
-                MPI_Iprobe(0, TAG_WORK_ORDER, MPI_COMM_WORLD, &workFlag, &workStatus);
-                // If we found a Work Order.
-                if (workFlag != 0) {
-                    
-                    stringstream ss;
-                    ss << "Worker " << rank << " received work order";
-                    messageBuffer.push_back(ss.str());
-
-                    // Receive and process the work order
-                    fulfillOrder(workStatus);
-                }
             }
         }
 
@@ -106,54 +91,15 @@ public:
         ss << "WORKER " << rank << " FINISHED";
         messageBuffer.push_back(ss.str());
 
-        for (string s : messageBuffer) {
-            cout << s << endl;
+        if (DEBUG) {
+            for (string s : messageBuffer) {
+                cout << s << endl;
+            }
         }
 
         // Tell manager that we are done.
         int dummy = rank;
         MPI_Send(&dummy, 1, MPI_INT, 0, TAG_TERMINATION_NOTICE, MPI_COMM_WORLD);
-    }
-
-    // Retrieves the work order from the manager and processes it.
-    void fulfillOrder(MPI_Status & orderStatus) {
-
-        // Peek at the size of the data.
-        int messageDataLength;
-        MPI_Get_count(&orderStatus, MPI_INT, &messageDataLength);
-
-        // Construct a vector to hold the data.
-        vector<int> addresses(messageDataLength);
-
-        // Receive the data from the Manager
-        MPI_Status workOrderStatus;
-        MPI_Recv(&addresses[0], messageDataLength, MPI_INT, 0, TAG_WORK_ORDER, MPI_COMM_WORLD, &workOrderStatus);
-
-        // First things first, get the chunk position off the back of the list. 
-        // Every other int in the list is a rank address
-        int chunkPosition = addresses.back();
-        addresses.pop_back();
-
-        // Decide the size of the chunk at that position.
-        int size = chunkPosition != DATA_SIZE_IN_CHUNKS - 1 ? CHUNK_SIZE_IN_BYTES : LEFTOVER_SIZE_IN_BYTES;
-
-        // Get the actual pointer to data
-        BYTE * dataIndex = data + (CHUNK_SIZE_IN_BYTES * chunkPosition);
-
-        // Send the data to the designated Workers, thus fulfilling the work order.
-        sendChunk(dataIndex, size, chunkPosition, addresses);
-    }
-
-    // Send a chunk of data to each computer inside addresses.
-    void sendChunk(char * data, int length, int chunkPosition, vector<int> addresses) {
-        for (unsigned int i = 0; i < addresses.size(); i++) {
-           
-            stringstream ss;
-            ss << "Worker " << rank << " is sending chunk " << chunkPosition << " to Worker " << addresses[i];
-            messageBuffer.push_back(ss.str());
-            
-            MPI_Send(data, length, MPI_CHAR, addresses[i], TAG_DATA_REQUEST, MPI_COMM_WORLD);
-        }
     }
 
     // True if there are pending messages to receive.

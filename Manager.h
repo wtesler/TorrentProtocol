@@ -7,7 +7,7 @@
 #include <string>
 #include <sstream>
 
-#define DEBUG true
+#define DEBUG false
 
 typedef char BYTE;
 typedef int FLAG;
@@ -57,30 +57,12 @@ public:
     }
 
     // Send a chunk of data to each computer inside addresses.
-    void sendChunk(BYTE * data, int length, int chunkPosition, vector<int> addresses) {
-        for (unsigned int i = 0; i < addresses.size(); i++) {
-
-            stringstream ss;
-            ss << "Manager sending chunk " << chunkPosition << " to Worker " << addresses[i];
-            messageBuffer.push_back(ss.str());
-
-            MPI_Send(data, length, MPI_CHAR, addresses[i], TAG_DATA_REQUEST, MPI_COMM_WORLD);
-        }
-    }
-
-    // Sends a work order to a computer.
-    // Tells that computer to send data to another computer.
-    void sendWorkOrder(int dest, int chunkPosition, vector<int> addresses) {
-
+    void sendChunk(BYTE * data, int length, int chunkPosition, int rank) {
         stringstream ss;
-        ss << "Sending Work Order to " << dest;
+        ss << "Manager sending chunk " << chunkPosition << " to Worker " << rank;
         messageBuffer.push_back(ss.str());
 
-        // We store the position of the chunk in the last index of the vector.
-        // Every other index contains rank addresses.
-        addresses.push_back(chunkPosition);
-
-        MPI_Send(&addresses[0], addresses.size(), MPI_INT, dest, TAG_WORK_ORDER, MPI_COMM_WORLD);
+        MPI_Send(data, length, MPI_CHAR, rank, TAG_DATA_REQUEST, MPI_COMM_WORLD);
     }
 
     // This kicks off the Manager and begins the entire uploading/downloading network (swarm)
@@ -103,10 +85,6 @@ public:
             MPI_Irecv(&dummy, 1, MPI_INT, i+1, TAG_TERMINATION_NOTICE, MPI_COMM_WORLD, &terminationRequests[i]);
         }
 
-        // Keeps track of how many times the main loop iterates (mod INT_MAX).
-        // Useful for pacing the Manager.
-        int i = 0;
-
         // MAIN LOOP. Will only exit when there are no more workers in the swarm.
         while(numTerminations < networkSize){
 
@@ -125,6 +103,7 @@ public:
                 dataFlag = -1;
             }
 
+            // Test to see if any worker has terminated.
             for (int j = 0; j < networkSize-1; j++) {
                 FLAG terminationFlag = -1;
                 MPI_Test(&terminationRequests[j], &terminationFlag, &terminationStatus);
@@ -134,21 +113,6 @@ public:
                     }
                 } 
             }
-
-            // Manager helps out with the data every so often (as defined by MANAGER_SEND_FREQ).
-            if (i % MANAGER_SEND_FREQ == 0) {
-                // This chunk of data currently has the highest priority.
-                TorrentNode * chunk = static_cast<TorrentNode*>(list->lead);
-                // Synchronously send the data each computer on the waitlist.
-                sendChunk(chunk->getData(), chunk->getDataLength(), chunk->getPosition(), chunk->getWaitlist());
-                // Reset the priority and waitlist of sent chunk.
-                chunk->clearWaitlist();
-                list->set(chunk, 0);
-            }
-
-            // Prevents oveflow.
-            if (i == INT_MAX) { i = 0;}
-            i++;
         }
 
         stringstream ss;
@@ -177,50 +141,10 @@ public:
         // This is the chunk that source wants
         TorrentNode * desiredChunk = static_cast<TorrentNode*>(&list->nodeAt(chunkPosition));
 
-        // Adds source to the waitlist if not already on it.
-        desiredChunk->add(source);
-
-        // Raise priority of chunk to reflect source's message.
-        list -> set(desiredChunk, desiredChunk->getPriority() + 1);
-
-        // See if the worker can help out.
-        createWorkRequest(source, chunkPosition, desiredChunk);
+        sendChunk(desiredChunk->getData(), desiredChunk->getDataLength(),
+            desiredChunk->getPosition(), source);
 
     }
 
-    // If the source can help out, send it a work order.
-    void createWorkRequest(const int source, const int chunkPosition, TorrentNode * desiredChunk) {
-
-        // Start from the front, and we will make our way to the back.
-        TorrentNode * iter = static_cast<TorrentNode*>(list->lead);
-
-        // Loops as long as there is still a potential chunk that source can help out with.
-        while (iter != nullptr && iter->getPriority() > 0) {
-
-            stringstream ss;
-            ss << "Checking to see if Worker " << source << " can help with chunk " << iter->getPosition();
-            messageBuffer.push_back(ss.str());
-
-            // If the source is ahead of the prioritized chunk
-            if (chunkPosition > iter->getPosition()){
-
-                // Tell the source to do some work.
-                sendWorkOrder(source, iter->getPosition(), iter->getWaitlist());
-
-                // Reward the source for helping out.
-                list -> set(desiredChunk, desiredChunk->getPriority() + iter->getWaitlist().size());
-
-                // Reset the node's waitlist and priority.
-                iter->clearWaitlist();
-                list->set(iter, 0);
-
-                break;
-            }
-
-            // Try the next chunk
-            iter = static_cast<TorrentNode*>(iter->back);
-        }
-
-    }
 
 };
