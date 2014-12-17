@@ -31,9 +31,11 @@ public:
         //Aggregates the data.
         data = new BYTE[DATA_SIZE_IN_BYTES]();
 
-        stringstream ss;
-        ss << "Worker " << rank << " created.";
-        messageBuffer.push_back(ss.str());
+        if (DEBUG) {
+            stringstream ss;
+            ss << "Worker " << rank << " created.";
+            messageBuffer.push_back(ss.str());
+        }
     }
 
     ~Worker(void) {
@@ -76,9 +78,11 @@ public:
                 // If we found an incoming chunk
                 if (dataFlag != 0){
 
-                    stringstream ss;
-                    ss << "Worker " << rank << " received chunk " << i;
-                    messageBuffer.push_back(ss.str());
+                    if (DEBUG) {
+                        stringstream ss;
+                        ss << "Worker " << rank << " received chunk " << i;
+                        messageBuffer.push_back(ss.str());
+                    }
 
                     // Move onto the next chunk.
                     // This is the only place where the loop can exit.
@@ -92,9 +96,11 @@ public:
                 // If we found a Work Order.
                 if (workFlag != 0) {
                     
-                    stringstream ss;
-                    ss << "Worker " << rank << " received work order";
-                    messageBuffer.push_back(ss.str());
+                    if (DEBUG) {
+                        stringstream ss;
+                        ss << "Worker " << rank << " received work order";
+                        messageBuffer.push_back(ss.str());
+                    }
 
                     // Receive and process the work order
                     fulfillOrder(workStatus);
@@ -102,11 +108,11 @@ public:
             }
         }
 
-        stringstream ss;
-        ss << "WORKER " << rank << " FINISHED";
-        messageBuffer.push_back(ss.str());
-
         if (DEBUG) {
+            stringstream ss;
+            ss << "WORKER " << rank << " FINISHED";
+            messageBuffer.push_back(ss.str());
+
             for (string s : messageBuffer) {
                 cout << s << endl;
             }
@@ -150,9 +156,11 @@ public:
     void sendChunk(char * data, int length, int chunkPosition, vector<int> addresses) {
         for (unsigned int i = 0; i < addresses.size(); i++) {
            
-            stringstream ss;
-            ss << "Worker " << rank << " is sending chunk " << chunkPosition << " to Worker " << addresses[i];
-            messageBuffer.push_back(ss.str());
+            if (DEBUG) {
+                stringstream ss;
+                ss << "Worker " << rank << " is sending chunk " << chunkPosition << " to Worker " << addresses[i];
+                messageBuffer.push_back(ss.str());
+            }
             
             MPI_Send(data, length, MPI_CHAR, addresses[i], TAG_DATA_REQUEST, MPI_COMM_WORLD);
         }

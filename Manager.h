@@ -60,9 +60,11 @@ public:
     void sendChunk(BYTE * data, int length, int chunkPosition, vector<int> addresses) {
         for (unsigned int i = 0; i < addresses.size(); i++) {
 
-            stringstream ss;
-            ss << "Manager sending chunk " << chunkPosition << " to Worker " << addresses[i];
-            messageBuffer.push_back(ss.str());
+            if (DEBUG) {
+                stringstream ss;
+                ss << "Manager sending chunk " << chunkPosition << " to Worker " << addresses[i];
+                messageBuffer.push_back(ss.str());
+            }
 
             MPI_Send(data, length, MPI_CHAR, addresses[i], TAG_DATA_REQUEST, MPI_COMM_WORLD);
         }
@@ -72,9 +74,11 @@ public:
     // Tells that computer to send data to another computer.
     void sendWorkOrder(int dest, int chunkPosition, vector<int> addresses) {
 
-        stringstream ss;
-        ss << "Sending Work Order to " << dest;
-        messageBuffer.push_back(ss.str());
+        if (DEBUG) {
+            stringstream ss;
+            ss << "Sending Work Order to " << dest;
+            messageBuffer.push_back(ss.str());
+        }
 
         // We store the position of the chunk in the last index of the vector.
         // Every other index contains rank addresses.
@@ -98,7 +102,6 @@ public:
 
         // Keeps track of how many workers have finished
         int numTerminations = 1;
-
         for (int i = 0; i < networkSize - 1; i++) {
             MPI_Irecv(&dummy, 1, MPI_INT, i+1, TAG_TERMINATION_NOTICE, MPI_COMM_WORLD, &terminationRequests[i]);
         }
@@ -136,7 +139,7 @@ public:
             }
 
             // Manager helps out with the data every so often (as defined by MANAGER_SEND_FREQ).
-            if (i % MANAGER_SEND_FREQ == 0) {
+            if (i % networkSize == 0) {
                 // This chunk of data currently has the highest priority.
                 TorrentNode * chunk = static_cast<TorrentNode*>(list->lead);
                 // Synchronously send the data each computer on the waitlist.
@@ -151,11 +154,11 @@ public:
             i++;
         }
 
-        stringstream ss;
-        ss << "Manager has terminated";
-        messageBuffer.push_back(ss.str());
-
         if (DEBUG) {
+            stringstream ss;
+            ss << "Manager has terminated";
+            messageBuffer.push_back(ss.str());
+
             for (string s : messageBuffer) {
                 cout << s << endl;
             }
@@ -170,9 +173,11 @@ public:
         // The computer that sent us the request.
         int source = status->MPI_SOURCE;
 
-        stringstream ss;
-        ss << "Worker " << source << " wants chunk " << chunkPosition;
-        messageBuffer.push_back(ss.str());
+        if (DEBUG) {
+            stringstream ss;
+            ss << "Worker " << source << " wants chunk " << chunkPosition;
+            messageBuffer.push_back(ss.str());
+        }
 
         // This is the chunk that source wants
         TorrentNode * desiredChunk = static_cast<TorrentNode*>(&list->nodeAt(chunkPosition));
@@ -197,9 +202,11 @@ public:
         // Loops as long as there is still a potential chunk that source can help out with.
         while (iter != nullptr && iter->getPriority() > 0) {
 
-            stringstream ss;
-            ss << "Checking to see if Worker " << source << " can help with chunk " << iter->getPosition();
-            messageBuffer.push_back(ss.str());
+            if (DEBUG) {
+                stringstream ss;
+                ss << "Checking to see if Worker " << source << " can help with chunk " << iter->getPosition();
+                messageBuffer.push_back(ss.str());
+            }
 
             // If the source is ahead of the prioritized chunk
             if (chunkPosition > iter->getPosition()){
