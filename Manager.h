@@ -7,7 +7,7 @@
 #include <string>
 #include <sstream>
 
-#define DEBUG true
+#define DEBUG false
 
 typedef char BYTE;
 typedef int FLAG;

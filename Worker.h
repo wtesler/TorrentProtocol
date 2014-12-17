@@ -5,7 +5,7 @@
 #include <vector>
 #include <sstream>
 
-#define DEBUG true
+#define DEBUG false
 
 typedef int FLAG;
 typedef char BYTE;
@@ -106,8 +106,10 @@ public:
         ss << "WORKER " << rank << " FINISHED";
         messageBuffer.push_back(ss.str());
 
-        for (string s : messageBuffer) {
-            cout << s << endl;
+        if (DEBUG) {
+            for (string s : messageBuffer) {
+                cout << s << endl;
+            }
         }
 
         // Tell manager that we are done.
