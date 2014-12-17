@@ -64,7 +64,7 @@ void init_manager_process(Manager * manager, int size){
 void init_worker_process(Worker * worker, int rank){
     worker = new Worker(rank);
     timespec time;
-    time.tv_nsec = rank * 10000;
+    time.tv_nsec = rank * 100000;
     nanosleep(&time, NULL);
     worker->start();
 }
