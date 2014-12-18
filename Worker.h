@@ -12,6 +12,13 @@ typedef char BYTE;
 
 using namespace std;
 
+/* 
+This class represents the peers in the model. 
+Worker attempts to download blocks of data, but 
+simultaneously it is forwarding previous blocks
+to other workers based on a manager request.
+*/
+
 #pragma once
 class Worker {
 
@@ -22,13 +29,14 @@ private:
 
     const int rank;
 
+    // Holds debug messages.
     vector<string> messageBuffer;
 
 public:
 
     Worker(int rank) : rank(rank) {
 
-        //Aggregates the data.
+        //Initialize the array that aggregates the data.
         data = new BYTE[DATA_SIZE_IN_BYTES]();
 
         if (DEBUG) {
@@ -57,11 +65,12 @@ public:
             // The place where the new chunk should go.
             BYTE * dataIndex = data + (CHUNK_SIZE_IN_BYTES * i);
 
-            // Issue a new asynchronous receive for the chunk data.
+            // Objects used by the Worker when receiving data.
             FLAG dataFlag = -1;
             MPI_Request dataRequest;
             MPI_Status dataStatus;
 
+            // Objects used by the Worker when receiving work requests.
             FLAG workFlag = -1;
             MPI_Status workStatus;
             
@@ -70,6 +79,7 @@ public:
             // While incoming data has NOT arrived, probe for work orders.
             while(true) {
 
+                // Asynchronously start watching for data.
                 if (dataFlag != 0) {
                     MPI_Irecv(dataIndex, size, MPI_CHAR, MPI_ANY_SOURCE, TAG_DATA_REQUEST, MPI_COMM_WORLD, &dataRequest);
                     dataFlag = 0;
@@ -108,6 +118,7 @@ public:
             }
         }
 
+        // Print debug info from the message buffer.
         if (DEBUG) {
             stringstream ss;
             ss << "WORKER " << rank << " FINISHED";

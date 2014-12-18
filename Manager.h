@@ -23,10 +23,13 @@ private:
     // Prioritized Linked List of segments of data.
     TorrentNodeList * list;
 
+    // Number of processors participating in the network
     int networkSize;
 
+    // Stores messages for debugging
     vector<string> messageBuffer;
 
+    // Stores an array of requests associated with each worker.
     MPI_Request * terminationRequests;
 
 public:
@@ -46,7 +49,8 @@ public:
         // Structure the data into prioritizable chunks
         list = new TorrentNodeList(data, DATA_SIZE_IN_BYTES, CHUNK_SIZE_IN_BYTES);
 
-        terminationRequests = new MPI_Request[networkSize];
+        // One termination request per worker.
+        terminationRequests = new MPI_Request[networkSize-1];
     }
 
     // Destructor
@@ -128,6 +132,7 @@ public:
                 dataFlag = -1;
             }
 
+            // Test to see if any termination notices came in.
             for (int j = 0; j < networkSize-1; j++) {
                 FLAG terminationFlag = -1;
                 MPI_Test(&terminationRequests[j], &terminationFlag, &terminationStatus);
@@ -154,6 +159,7 @@ public:
             i++;
         }
 
+        // Print debug info from the message buffer
         if (DEBUG) {
             stringstream ss;
             ss << "Manager has terminated";

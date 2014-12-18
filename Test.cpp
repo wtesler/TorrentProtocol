@@ -29,9 +29,10 @@ int main(int argc, char* argv[]) {
     if (rank == 0) manager = new Manager(size);
     else worker = new Worker(rank);
 
-    // Wait.
+    // Wait for everyone to catch up.
     MPI_Barrier(MPI_COMM_WORLD);
 
+    // Start the clock. Useful for diagnostics.
     timespec time1, time2;
     clock_gettime(CLOCK_MONOTONIC, &time1);
 
@@ -62,10 +63,14 @@ void init_manager_process(Manager * manager, int size){
 }
 
 void init_worker_process(Worker * worker, int rank){
+
     worker = new Worker(rank);
+
+    //Spread out the time between Worker starts.
     timespec time;
     time.tv_nsec = rank * 100000;
     nanosleep(&time, NULL);
+
     worker->start();
 }
 
