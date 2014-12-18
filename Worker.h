@@ -1,3 +1,5 @@
+/* Copyright (c) 2014 Will Tesler */
+
 #include "Constants.h"
 #include <string>
 #include <iostream>

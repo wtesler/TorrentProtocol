@@ -1,3 +1,5 @@
+/* Copyright (c) 2014 Will Tesler */
+
 #include "TorrentNode.h"
 #include "TorrentNodeList.h"
 #include "Constants.h"

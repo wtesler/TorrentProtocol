@@ -1,3 +1,5 @@
+/* Copyright (c) 2014 Will Tesler */
+
 #pragma once
 class PriorityNode {
 
